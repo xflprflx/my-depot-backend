@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: my-depot-backend
+  profiles:
+    active: ${APP_PROFILE:test}
+  datasource:
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    open-in-view: false
+security:
+  client-id: ${CLIENT_ID:myclientid}
+  client-secret: ${CLIENT_SECRET:myclientsecret}
+  jwt:
+    duration: ${JWT_DURATION:3600}
+cors:
+  origins: ${CORS_ORIGINS:http://localhost:4200}
