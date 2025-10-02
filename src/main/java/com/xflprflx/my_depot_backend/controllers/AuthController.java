@@ -1,6 +1,9 @@
 package com.xflprflx.my_depot_backend.controllers;
 
 import com.xflprflx.my_depot_backend.model.dtos.request.LoginRequest;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Arrays;
 import java.util.Map;
 
 @RestController
@@ -29,9 +33,11 @@ public class AuthController {
     @Value("${security.client-secret}")
     private String clientSecret;
 
+    @Value("${security.jwt.duration}")
+    private int tokenDuration;
+
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
-        System.out.println("aasasa");
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "password");
         body.add("username", loginRequest.email());
@@ -44,23 +50,54 @@ public class AuthController {
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
+            ResponseEntity<Map> tokenResponse = restTemplate.exchange(
                     tokenUri,
                     HttpMethod.POST,
                     request,
-                    String.class
+                    Map.class
             );
-            return ResponseEntity.ok(response.getBody());
+
+            Map<String, Object> tokens = tokenResponse.getBody();
+
+            // set HttpOnly cookies
+            addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
+            addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
+
+            return ResponseEntity.ok(Map.of("message", "Login successful"));
+
         } catch (HttpClientErrorException e) {
             return ResponseEntity.status(e.getStatusCode())
                     .body(Map.of("error", e.getResponseBodyAsString()));
         }
     }
 
-    @PostMapping("/refresh")
-    public ResponseEntity<?> refresh(@RequestBody Map<String, String> payload) {
-        String refreshToken = payload.get("refresh_token");
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(HttpServletResponse response) {
+        // remove cookies
+        addCookie(response, "access_token", "", 0);
+        addCookie(response, "refresh_token", "", 0);
+        return ResponseEntity.ok(Map.of("message", "Logged out"));
+    }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
+        // Pega o refresh token do cookie
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "No cookies found"));
+        }
+
+        String refreshToken = Arrays.stream(cookies)
+                .filter(c -> c.getName().equals("refresh_token"))
+                .findFirst()
+                .map(Cookie::getValue)
+                .orElse(null);
+
+        if (refreshToken == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Refresh token missing"));
+        }
+
+        // Monta request pro Authorization Server
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "refresh_token");
         body.add("refresh_token", refreshToken);
@@ -69,21 +106,40 @@ public class AuthController {
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         headers.setBasicAuth(clientId, clientSecret);
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(body, headers);
 
         try {
-            ResponseEntity<String> response = restTemplate.exchange(
+            ResponseEntity<Map> tokenResponse = restTemplate.exchange(
                     tokenUri,
                     HttpMethod.POST,
-                    request,
-                    String.class
+                    requestEntity,
+                    Map.class
             );
-            return ResponseEntity.ok(response.getBody());
+
+            Map<String, Object> tokens = tokenResponse.getBody();
+
+            // Atualiza cookies HTTP-Only
+            addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
+            addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
+
+            return ResponseEntity.ok(Map.of("message", "Token refreshed"));
+
         } catch (HttpClientErrorException e) {
+            // Se refresh falhar (ex: expirou), limpa cookies
+            addCookie(response, "access_token", "", 0);
+            addCookie(response, "refresh_token", "", 0);
+
             return ResponseEntity.status(e.getStatusCode())
                     .body(Map.of("error", e.getResponseBodyAsString()));
         }
     }
 
-
+    private void addCookie(HttpServletResponse response, String name, String value, int maxAgeSec) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true); // se estiver usando HTTPS
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAgeSec);
+        response.addCookie(cookie);
+    }
 }
