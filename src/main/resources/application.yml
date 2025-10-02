@@ -11,6 +11,7 @@ spring:
 security:
   client-id: ${CLIENT_ID:myclientid}
   client-secret: ${CLIENT_SECRET:myclientsecret}
+  token-uri: ${TOKEN_URI:http://localhost:8080/oauth2/token}
   jwt:
     duration: ${JWT_DURATION:3600}
 cors:
