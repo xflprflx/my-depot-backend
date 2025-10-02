@@ -1,7 +1,7 @@
 spring:
   datasource:
     #TODO #PROD ajustar database path
-    url: jdbc:postgresql://localhost:5432/almox_one_dev
+    #url: jdbc:postgresql://localhost:5432/almox_one_dev
   jpa:
     show-sql: true
     hibernate:
