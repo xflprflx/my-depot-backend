@@ -1,11 +1,15 @@
 package com.xflprflx.my_depot_backend.controllers;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xflprflx.my_depot_backend.model.dtos.request.LoginRequest;
+import com.xflprflx.my_depot_backend.model.dtos.response.LoggedInUser;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +20,8 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -36,40 +42,57 @@ public class AuthController {
     @Value("${security.jwt.duration}")
     private int tokenDuration;
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "password");
-        body.add("username", loginRequest.email());
-        body.add("password", loginRequest.password());
+        @PostMapping("/login")
+        public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("grant_type", "password");
+            body.add("username", loginRequest.email());
+            body.add("password", loginRequest.password());
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.setBasicAuth(clientId, clientSecret);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            headers.setBasicAuth(clientId, clientSecret);
 
-        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-        try {
-            ResponseEntity<Map> tokenResponse = restTemplate.exchange(
-                    tokenUri,
-                    HttpMethod.POST,
-                    request,
-                    Map.class
-            );
+            try {
+                ResponseEntity<Map> tokenResponse = restTemplate.exchange(
+                        tokenUri,
+                        HttpMethod.POST,
+                        request,
+                        Map.class
+                );
 
-            Map<String, Object> tokens = tokenResponse.getBody();
+                Map<String, Object> tokens = tokenResponse.getBody();
 
-            // set HttpOnly cookies
-            addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
-            addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
+                // set HttpOnly cookies
+                addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
+                addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
 
-            return ResponseEntity.ok(Map.of("message", "Login successful"));
+                // decode JWT to get user info
+                String accessToken = (String) tokens.get("access_token");
+                String[] parts = accessToken.split("\\.");
+                String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+                ObjectMapper mapper = new ObjectMapper();
+                Map<String, Object> claims = null;
+                try {
+                    claims = mapper.readValue(payload, Map.class);
+                } catch (JsonProcessingException e) {
+                    throw new RuntimeException(e);
+                }
 
-        } catch (HttpClientErrorException e) {
-            return ResponseEntity.status(e.getStatusCode())
-                    .body(Map.of("error", e.getResponseBodyAsString()));
+                String email = (String) claims.get("username");
+                List<String> authorities = (List<String>) claims.get(("authorities"));
+
+                LoggedInUser loggedInUser = new LoggedInUser(email, authorities);
+
+                return ResponseEntity.ok().body(loggedInUser);
+
+            } catch (HttpClientErrorException e) {
+                return ResponseEntity.status(e.getStatusCode())
+                        .body(Map.of("error", e.getResponseBodyAsString()));
+            }
         }
-    }
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
@@ -122,7 +145,25 @@ public class AuthController {
             addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
             addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
 
-            return ResponseEntity.ok(Map.of("message", "Token refreshed"));
+            // decode JWT to get user info
+            String accessToken = (String) tokens.get("access_token");
+            String[] parts = accessToken.split("\\.");
+            String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> claims = null;
+            try {
+                claims = mapper.readValue(payload, Map.class);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+
+            String email = (String) claims.get("username");
+            List<String> authorities = (List<String>) claims.get(("authorities"));
+
+            LoggedInUser loggedInUser = new LoggedInUser(email, authorities);
+
+            return ResponseEntity.ok().body(loggedInUser);
+
 
         } catch (HttpClientErrorException e) {
             // Se refresh falhar (ex: expirou), limpa cookies
@@ -141,5 +182,11 @@ public class AuthController {
         cookie.setPath("/");
         cookie.setMaxAge(maxAgeSec);
         response.addCookie(cookie);
+    }
+
+    @PreAuthorize("hasAuthority('CATEGORIES_READ')")
+    @PostMapping("/teste")
+    public ResponseEntity<Void> teste() {
+        return ResponseEntity.ok().build();
     }
 }
