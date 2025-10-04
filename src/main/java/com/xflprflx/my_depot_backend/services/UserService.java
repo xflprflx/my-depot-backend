@@ -28,8 +28,7 @@ public class UserService implements UserDetailsService {
     }
 
     public NewUserResponse createNewUser(NewUserRequest newUserRequest) {
-        newUserRequest.encodePassword(passwordEncoder);
-        User user = userRepository.save(UserFactory.from(newUserRequest));
+        User user = userRepository.save(UserFactory.newUserFrom(newUserRequest, passwordEncoder));
         return user.toNewUserResponse();
     }
 }

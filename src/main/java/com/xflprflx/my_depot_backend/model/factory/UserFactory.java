@@ -4,20 +4,21 @@ import com.xflprflx.my_depot_backend.model.Branch;
 import com.xflprflx.my_depot_backend.model.User;
 import com.xflprflx.my_depot_backend.model.access_control.AccessProfile;
 import com.xflprflx.my_depot_backend.model.dtos.request.NewUserRequest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 public class UserFactory {
 
-    public static User from(NewUserRequest newUserRequest) {
+    public static User newUserFrom(NewUserRequest newUserRequest, PasswordEncoder passwordEncoder) {
         AccessProfile accessProfile = new AccessProfile();
-        accessProfile.setId(newUserRequest.getAccessProfileId());
+        accessProfile.setId(newUserRequest.accessProfileId());
 
         Branch branch = new Branch();
-        branch.setId(newUserRequest.getBranchId());
+        branch.setId(newUserRequest.branchId());
 
         return new User(
-                newUserRequest.getName(),
-                newUserRequest.getEmail(),
-                newUserRequest.getPassword(),
+                newUserRequest.name(),
+                newUserRequest.email(),
+                passwordEncoder.encode(newUserRequest.password()),
                 accessProfile,
                 branch
         );
