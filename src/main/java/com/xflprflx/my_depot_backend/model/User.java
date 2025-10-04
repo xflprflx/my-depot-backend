@@ -2,7 +2,10 @@ package com.xflprflx.my_depot_backend.model;
 
 import com.xflprflx.my_depot_backend.model.access_control.AccessProfile;
 import com.xflprflx.my_depot_backend.model.base.tenant.MultiTenantEntity;
+import com.xflprflx.my_depot_backend.model.dtos.request.NewUserRequest;
+import com.xflprflx.my_depot_backend.model.dtos.response.NewUserResponse;
 import jakarta.persistence.*;
+import jakarta.validation.Valid;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -51,6 +54,32 @@ public class User extends MultiTenantEntity implements Serializable, UserDetails
     private Branch branch;
 
     public User() {
+    }
+
+    public User(@Valid NewUserRequest newUserRequest) {
+        this.name = newUserRequest.getName();
+        this.email = newUserRequest.getEmail();
+        this.password = newUserRequest.getPassword();
+        this.accountNonExpired = true;
+        this.accountNonLocked = true;
+        this.credentialsNonExpired = true;
+        this.enabled = true;
+        this.accessProfile = new AccessProfile();
+        this.accessProfile.setId(newUserRequest.getAccessProfileId());
+        this.branch = new Branch();
+        this.branch.setId(newUserRequest.getBranchId());
+    }
+
+    public User(String name, String email, String password, AccessProfile accessProfile, Branch branch) {
+        this.name = name;
+        this.email = email;
+        this.password = password;
+        this.accountNonExpired = true;
+        this.accountNonLocked = true;
+        this.credentialsNonExpired = true;
+        this.enabled = true;
+        this.accessProfile = accessProfile;
+        this.branch = branch;
     }
 
     public Long getId() {
@@ -178,5 +207,9 @@ public class User extends MultiTenantEntity implements Serializable, UserDetails
     @Override
     public int hashCode() {
         return Objects.hash(name, email);
+    }
+
+    public NewUserResponse toNewUserResponse() {
+        return new NewUserResponse(this);
     }
 }

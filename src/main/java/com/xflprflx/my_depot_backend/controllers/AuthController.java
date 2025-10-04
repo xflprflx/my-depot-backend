@@ -42,57 +42,51 @@ public class AuthController {
     @Value("${security.jwt.duration}")
     private int tokenDuration;
 
-        @PostMapping("/login")
-        public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
-            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("grant_type", "password");
-            body.add("username", loginRequest.email());
-            body.add("password", loginRequest.password());
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "password");
+        body.add("username", loginRequest.email());
+        body.add("password", loginRequest.password());
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            headers.setBasicAuth(clientId, clientSecret);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setBasicAuth(clientId, clientSecret);
 
-            HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            try {
-                ResponseEntity<Map> tokenResponse = restTemplate.exchange(
-                        tokenUri,
-                        HttpMethod.POST,
-                        request,
-                        Map.class
-                );
+        ResponseEntity<Map> tokenResponse = restTemplate.exchange(
+                tokenUri,
+                HttpMethod.POST,
+                request,
+                Map.class
+        );
 
-                Map<String, Object> tokens = tokenResponse.getBody();
+        Map<String, Object> tokens = tokenResponse.getBody();
 
-                // set HttpOnly cookies
-                addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
-                addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
+        // set HttpOnly cookies
+        addCookie(response, "access_token", (String) tokens.get("access_token"), this.tokenDuration);
+        addCookie(response, "refresh_token", (String) tokens.get("refresh_token"), this.tokenDuration);
 
-                // decode JWT to get user info
-                String accessToken = (String) tokens.get("access_token");
-                String[] parts = accessToken.split("\\.");
-                String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
-                ObjectMapper mapper = new ObjectMapper();
-                Map<String, Object> claims = null;
-                try {
-                    claims = mapper.readValue(payload, Map.class);
-                } catch (JsonProcessingException e) {
-                    throw new RuntimeException(e);
-                }
-
-                String email = (String) claims.get("username");
-                List<String> authorities = (List<String>) claims.get(("authorities"));
-
-                LoggedInUser loggedInUser = new LoggedInUser(email, authorities);
-
-                return ResponseEntity.ok().body(loggedInUser);
-
-            } catch (HttpClientErrorException e) {
-                return ResponseEntity.status(e.getStatusCode())
-                        .body(Map.of("error", e.getResponseBodyAsString()));
-            }
+        // decode JWT to get user info
+        String accessToken = (String) tokens.get("access_token");
+        String[] parts = accessToken.split("\\.");
+        String payload = new String(Base64.getUrlDecoder().decode(parts[1]));
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> claims = null;
+        try {
+            claims = mapper.readValue(payload, Map.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
         }
+
+        String email = (String) claims.get("username");
+        List<String> authorities = (List<String>) claims.get(("authorities"));
+
+        LoggedInUser loggedInUser = new LoggedInUser(email, authorities);
+
+        return ResponseEntity.ok().body(loggedInUser);
+    }
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletResponse response) {
