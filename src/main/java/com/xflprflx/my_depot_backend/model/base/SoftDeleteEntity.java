@@ -5,6 +5,7 @@ import jakarta.persistence.MappedSuperclass;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.SQLDelete;
 
 import java.time.LocalDateTime;
 

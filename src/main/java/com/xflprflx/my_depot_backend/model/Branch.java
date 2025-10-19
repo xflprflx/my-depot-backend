@@ -2,6 +2,7 @@ package com.xflprflx.my_depot_backend.model;
 
 import com.xflprflx.my_depot_backend.model.base.tenant.MultiTenantEntity;
 import jakarta.persistence.*;
+import org.hibernate.annotations.SoftDelete;
 
 import java.io.Serial;
 import java.io.Serializable;
